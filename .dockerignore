@@ -1,0 +1,24 @@
+# Dependencies — reinstalled inside the image
+node_modules/
+
+# Compiled output — rebuilt inside the image
+dist/
+
+# Local chunk data — not part of the image
+data/
+
+# Tests — not needed at runtime
+tests/
+
+# Local environment overrides — never bake secrets into the image
+.env
+
+# Dev artifacts
+*.log
+coverage/
+downloaded.txt
+test.txt
+
+# Git history
+.git/
+.gitignore
