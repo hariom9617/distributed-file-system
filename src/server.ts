@@ -48,7 +48,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
 
   // ── Routes ────────────────────────────────────────────────────────────────
   await chunkRoutes(app, store);
-  await healthRoutes(app, store);
+  await healthRoutes(app, store, config);
 
   // ── Global error handler ──────────────────────────────────────────────────
   app.setErrorHandler((error, _req, reply) => {

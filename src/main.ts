@@ -9,6 +9,7 @@ async function main(): Promise<void> {
   try {
     await app.listen({ port: config.port, host: "0.0.0.0" });
     app.log.info(`Storage node listening on port ${config.port}`);
+    app.log.info(`Node ID: ${config.nodeId}`);
     app.log.info(`Chunk storage path: ${config.storagePath}`);
   } catch (err) {
     app.log.error(err, "Failed to start server");

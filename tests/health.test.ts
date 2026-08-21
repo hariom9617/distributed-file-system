@@ -12,6 +12,8 @@ describe("GET /health", () => {
 
   beforeAll(async () => {
     await fsp.mkdir(TEST_STORAGE, { recursive: true });
+    // Use default NODE_ID (falls back to "node-1" when env var is absent).
+    delete process.env["NODE_ID"];
     const config = loadConfig();
     config.storagePath = TEST_STORAGE;
     config.logLevel = "silent";
@@ -39,11 +41,95 @@ describe("GET /health", () => {
     expect(body.storage.totalBytes).toBe(0);
   });
 
+  it("includes nodeId in the response", async () => {
+    const res = await app.inject({ method: "GET", url: "/health" });
+    const body = res.json<{ nodeId: string }>();
+    // When NODE_ID is not set, the default is "node-1".
+    expect(body.nodeId).toBe("node-1");
+  });
+
   it("includes process and system fields", async () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     const body = res.json<Record<string, unknown>>();
     expect(body).toHaveProperty("process");
     expect(body).toHaveProperty("system");
     expect(body).toHaveProperty("timestamp");
+  });
+});
+
+// ── NODE_ID configuration ────────────────────────────────────────────────────
+
+describe("NODE_ID configuration", () => {
+  const NODE_STORAGE = path.join(
+    os.tmpdir(),
+    `dfs-nodeid-test-${process.pid}`
+  );
+
+  afterAll(async () => {
+    await fsp.rm(NODE_STORAGE, { recursive: true, force: true });
+    // Clean up env var after suite.
+    delete process.env["NODE_ID"];
+  });
+
+  it("uses NODE_ID env var when provided", async () => {
+    await fsp.mkdir(NODE_STORAGE, { recursive: true });
+    process.env["NODE_ID"] = "node-42";
+
+    const config = loadConfig();
+    config.storagePath = NODE_STORAGE;
+    config.logLevel = "silent";
+    const app = await buildApp(config);
+
+    const res = await app.inject({ method: "GET", url: "/health" });
+    const body = res.json<{ nodeId: string }>();
+    expect(body.nodeId).toBe("node-42");
+
+    await app.close();
+    delete process.env["NODE_ID"];
+  });
+
+  it("defaults to node-1 when NODE_ID is not set", async () => {
+    await fsp.mkdir(NODE_STORAGE, { recursive: true });
+    delete process.env["NODE_ID"];
+
+    const config = loadConfig();
+    expect(config.nodeId).toBe("node-1");
+  });
+
+  it("accepts alphanumeric, hyphen and underscore in NODE_ID", async () => {
+    for (const id of ["node-1", "node_2", "StorageNode3", "abc-123_XYZ"]) {
+      process.env["NODE_ID"] = id;
+      const config = loadConfig();
+      expect(config.nodeId).toBe(id);
+    }
+    delete process.env["NODE_ID"];
+  });
+
+  it("throws on NODE_ID with path separator characters", () => {
+    process.env["NODE_ID"] = "node/evil";
+    expect(() => loadConfig()).toThrow(/Invalid NODE_ID/);
+    delete process.env["NODE_ID"];
+  });
+
+  it("throws on NODE_ID that is too long (>64 chars)", () => {
+    process.env["NODE_ID"] = "a".repeat(65);
+    expect(() => loadConfig()).toThrow(/Invalid NODE_ID/);
+    delete process.env["NODE_ID"];
+  });
+
+  it("reflects the correct nodeId when three different node configs are created", () => {
+    for (const [id, port] of [
+      ["node-1", "3001"],
+      ["node-2", "3002"],
+      ["node-3", "3003"],
+    ] as [string, string][]) {
+      process.env["NODE_ID"] = id;
+      process.env["PORT"] = port;
+      const config = loadConfig();
+      expect(config.nodeId).toBe(id);
+      expect(config.port).toBe(Number(port));
+    }
+    delete process.env["NODE_ID"];
+    delete process.env["PORT"];
   });
 });
